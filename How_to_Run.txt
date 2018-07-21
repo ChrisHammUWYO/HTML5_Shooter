@@ -1,0 +1,4 @@
+How to Run:
+--------------------------
+
+Open the shooter_game.html file in your web browser to run this file. NOTE: Make sure to maximize the web browser window to ensure that the game runs properly.

@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<!--Author: Chris Hamm -->
+<!--Original Creation date: 6/7/2017 -->
+<!--Last updated dated: 6/19/2018 -->
+<html>
+<head>
+	<title>HTML5 Shooter Game</title>
+</head>
+<body onload="init()">
+<canvas id="myCanvas" width="480" height="640"></canvas>
+<script>
+/**===========GLOBAL VARS============================================*/
+var ctx = document.getElementById("myCanvas").getContext("2d");
+var selectedWeapon = 1; //keeps track of what weapon is selected (1 - main cannon, 2 - wing cannon, 3 - tri cannon)
+var debugMode = false; //indicates whether or not the game is running in debug mode
+var gamePaused = false; //indicates whether or not the game is paused
+var gameOver = false;  //indicates that the player ran out of lives
+var displayMainCannonOutOfAmmoMessage = false; //indicates if the out of main cannon ammo message should be displayed
+var displayWingCannonOutOfAmmoMessage = false; //indicates if the out of wing cannon ammo message should be displayed
+var displayTriCannonOutOfAmmoMessage = false; // indicates if the out of tri cannon ammo message should be displayed
+var inputCheatCode = ""; //stores the cheat code input by the player
+var enteringCheatCode = false; //indicates if a cheat code is being entered
+var maximumMainCannonAmmo = 200; //indicates what the maximum amount of main cannon ammo is for the player
+var maximumWingCannonAmmo = 100; //indicates what the maximum amount of wing cannon ammo is for the player
+var maximumTriCannonAmmo = 50; //indicates what the maximum amount of tri cannon ammo is for the player
+
+//object array vars-------------------------------------------------------
+var keyMap = []; //array that holds the current key states of keys on the keyboard
+var mainCannonLasers = []; //array that holds all of the main cannon laser objects
+var wingCannonLasers = []; //array that holds all of the wing cannon laser objects
+var triCannonLasers = []; //array that holds all of the tri cannon laser objects
+var fallingBackgroundStars = []; //array that holds all of the background falling stars
+var fallingMeteors = []; //array that holds all of the falling meteors
+var enemyShips = []; //array that holds all of the enemy ships
+var enemyFormationShips = []; //array that holds all of the enemy formation ships
+var enemyLasers = []; //array that holds all of the enemy laser objects
+var ammoBoxes = []; //array that holds all of the ammo boxes
+//end of object array vars------------------------------------------------
+
+//player vars-------------------------------------------------------------
+var player_X = 240; //stores the x coordinate of the player
+var player_Y = 620; //stores the y coordinate of the player
+var player_Width = 20; //stores the width of the player
+var player_Height = 20; //stores the height of the player 
+//end of player vars-------------------------------------------------------
+
+//counter vars-------------------------------------------------------------------------------------
+var frameNumber = 0; //keeps track of what frame it is
+var mainCannonCooldownTimer = 0; //keeps track of when it is ok to fire the next cannon shot
+var wingCannonCooldownTimer = 0; //keeps track of when it is ok to fire the next cannon shot
+var triCannonCooldownTimer = 0; //keeps track of when it is ok to fire the next cannon shot
+var mainCannonAmmo = 75; //keeps track of how much ammo the player has for the main cannon
+var wingCannonAmmo = 50; //keeps track of how much ammo the player has for the wing cannons
+var triCannonAmmo = 25; //keeps track of how much ammo the player has for the tri cannon
+var playerScore = 0; //keeps track of how many points the player has
+var playerLives = 3; //keeps track of how many lives the player has
+var difficultyLevel = 1; //keeps track of what difficulty the game is on (determined by the frameNumber)
+//end of counter vars----------------------------------------------------------------------
+/**===========END OF GLOBAL VARS=====================================*/
+
+/**============EVENT LISTENERS FOR KEYSTROKES================*/
+window.addEventListener('keydown', handleKeyDownEvent, false); //event lister for keydown events
+window.addEventListener('keyup', handleKeyUpEvent, false); //event listener for keyup events
+/**============END OF EVENT LISTENERS FOR KEYSTROKES===========*/
+
+/**============INIT FUNCTION===================================*/
+function init(){
+	//make the initial background stars
+	for(i = 0; i < 15; i += 1){
+		makeInitialBackgroundStars();
+	}//end of for loop
+	window.requestAnimationFrame(draw);
+} //end of init function
+/**============END OF INIT FUNCTION============================*/
+
+/**============HANDLE KEY DOWN EVENT FUNCTION========================*/
+function handleKeyDownEvent(e){
+	console.log(String(e.keyCode) + " was pressed down.");
+	keyMap[e.keyCode] = true;
+}//end of handle key down event function
+/**=============END OF HANDLE KEY DOWN EVENT FUNCTION================*/
+
+/**===========HANDLE KEY UP EVENT FUNCTION==========================*/
+function handleKeyUpEvent(e){
+	console.log(String(e.keyCode) + " was released.");
+	keyMap[e.keyCode] = false;
+
+	if(enteringCheatCode == false){
+		//handle specific keys (other than movement keys)
+		if(e.keyCode == 32){ //if spacebar was released
+			displayMainCannonOutOfAmmoMessage = false; //reset the variable
+			displayWingCannonOutOfAmmoMessage = false; //reset the variable
+			displayTriCannonOutOfAmmoMessage = false; //reset the vraiable
+		}//end of if spacebar was released
+		else if(e.keyCode == 67 && gamePaused == true){ //if the C key was pressed and the game is paused
+			enteringCheatCode = true;
+			ctx.font = "18px Arial";
+			//update the cheat code text
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 580, 480, 680);
+			ctx.fillStyle = "Lime";
+			ctx.fillText("Enter Cheat Code:" + inputCheatCode, 60, 600);
+			ctx.font = "14px Arial";
+			ctx.fillText("Press ENTER to input cheat or Press ESC to abort", 60, 620);
+		}//end of else if C key was released and game is paused
+		else if(e.keyCode == 69){ //if the E key was released
+			if(gamePaused == false){
+				console.log("Game Paused");
+				gamePaused = true;
+			}
+			else if(gamePaused == true){
+				console.log("Game UnPaused");
+				gamePaused = false;
+			}
+		}//end of if the E key was released
+		else if(e.keyCode == 70){ //if the F key was released
+			if(gamePaused == false){
+				console.log("Switching selected Weapon");
+				switchSelectedWeapon();
+			}//end of if gamePaused == false
+		}//end of if F key was released
+		else if(e.keyCode == 81){ //if the Q key was released, toggle debug mode
+			if(debugMode == false){
+				console.log("Debug Mode Enabled");
+				debugMode = true;
+			}
+			else if(debugMode == true){
+				console.log("Debug Mode Disabled");
+				debugMode = false;
+			}
+		} //end of if the Q key was released
+	}//end of if enteringCheatCode is false
+	else{
+		if(e.keyCode == 13){ //if enter was pressed
+			console.log("Cheat Code Entered:" + inputCheatCode);
+			var validCheatCode; //indicates if cheat code was valid or not
+			if(inputCheatCode == "65777779"){//if 'ammo' was typed in
+				console.log("valid cheat code 'ammo' was used");
+				mainCannonAmmo = maximumMainCannonAmmo;
+				wingCannonAmmo = maximumWingCannonAmmo;
+				triCannonAmmo = maximumTriCannonAmmo;
+				validCheatCode = true;
+			}//end of if 'ammo' was typed in
+			else if(inputCheatCode == "518580"){ //if '3up' was typed in using normal number keys
+				console.log("valid cheat code '3up' was used");
+				playerLives += 3;
+				validCheatCode = true;
+			}//end of if '3up' was typed in using normal number keys
+			else if(inputCheatCode == "998580"){ //if '3up' was typed in using the number pad
+				console.log("valid cheat code '3up' was used");
+				playerLives += 3;
+				validCheatCode = true;
+			}//end of if '3up' was typed in using the number pad
+			else{
+				console.log("Invalid cheat code");
+				validCheatCode = false;
+			}
+			inputCheatCode = ""; //clear the var
+			enteringCheatCode = false;
+
+			//update the cheat code text
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 580, 480, 680);
+			if(validCheatCode == true){ //if code wwas valid
+				ctx.fillStyle = "Lime";
+				ctx.fillText("Valid Cheat Code Entered", 60, 600);
+			}//end if valid cheat code was entered
+			else{ //if invalid cheat code entered
+				ctx.fillStyle = "Red";
+				ctx.fillText("Invalid Cheat Code Entered", 60, 600);
+			}//end if invalid cheat code entered
+			ctx.fillStyle = "Lime";
+			ctx.font = "14px Arial";
+			ctx.fillText("Press C to input another cheat code", 60, 620);
+		}//if enter was pressed
+		else if(e.keyCode == 27){ //if esc was pressed
+			console.log("Cheat Code Input Cancelled");
+			inputCheatCode = ""; //clear the var
+			enteringCheatCode = false;
+
+			//clear the cheat code text
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 580, 480, 680);
+			ctx.fillStyle = "Red";
+			ctx.fillText("Cheat Code Input Cancelled", 60, 600);
+			ctx.fillStyle = "Lime";
+			ctx.font = "14px Arial";
+			ctx.fillText("Press C to input a cheat code", 60, 620);
+		}//end of if esc was pressed
+		else{ //if not enter key
+			inputCheatCode = inputCheatCode + String(e.keyCode);
+
+			//update the cheat code text
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 580, 480, 680);
+			ctx.fillStyle = "Lime";
+			ctx.fillText("Enter Cheat Code:" + inputCheatCode, 60, 600);
+			ctx.font = "14px Arial";
+			ctx.fillText("Press ENTER to input cheat or Press ESC to abort", 60, 620);
+		}//end of if not enter key
+	}//end of else enteringCheatCode is true
+}//end of handle key up event function
+/**============END OF HANDLE KEY UP EVENT FUNCTION=====================*/
+
+/**===========MAKE INITIAL BACKGROUND STARS FUNCTION===================*/
+function makeInitialBackgroundStars(){
+	var star_X = Math.floor(Math.random() * (479 - 1 + 1)) + 1; //keeps track of star x position
+	var star_Y = Math.floor(Math.random() * (639 - 1 + 1)) + 1; //keeps track of stars y position
+	var star_R = 2; //keeps track of star radius
+	var star_FallingSpeed = 0.8; //keeps track of how fast the background stars fall
+
+	ctx.beginPath();
+	ctx.fillStyle = "white";
+	ctx.arc(star_X, star_Y, star_R, 0, Math.PI * 2);
+	ctx.fill();
+
+	//create star object
+	var star = {x: star_X, y: star_Y, r: star_R, fallingSpeed: star_FallingSpeed};
+
+	//add star to the array 
+	fallingBackgroundStars.push(star);
+}//end of makeInitialBackgroundStars function
+/**===============END OF MAKE INITIAL BACKGROUND STARS FUNCTION===========*/
+
+/**===========MAKE BACKGROUND STAR FUNCTION======================*/
+function makeBackgroundStar(){
+	var star_X = Math.floor(Math.random() * (479 - 1 + 1)) + 1; //keeps track of star x position
+	var star_Y = 0; //keeps track of stars y position
+	var star_R = 2; //keeps track of star radius
+	var star_FallingSpeed = 0.8; //keeps track of how fast the background stars fall
+
+	ctx.beginPath();
+	ctx.fillStyle = "white";
+	ctx.arc(star_X, star_Y, star_R, 0, Math.PI * 2);
+	ctx.fill();
+
+	//create star object
+	var star = {x: star_X, y: star_Y, r: star_R, fallingSpeed: star_FallingSpeed};
+
+	//add star to the array 
+	fallingBackgroundStars.push(star);
+}//end of make background star function
+/**===========END OF MAKE BACKGROUND STAR FUNCTION=============*/
+
+/**===========DRAW PLAYER FUNCTION==============================*/
+function drawPlayer(){
+	//ctx.fillStyle = "blue";
+	var shipGradient = ctx.createLinearGradient(player_X, player_Y, player_X, player_Y + player_Height);
+	shipGradient.addColorStop(0, "darkgray");
+	shipGradient.addColorStop(1, "dimgray");
+	ctx.fillStyle = shipGradient;
+
+	//Draw the ship body
+	ctx.fillRect(player_X + (player_Width / 2) - 4, player_Y, 8 , player_Height);
+
+	//Draw left wing
+	ctx.beginPath();
+	ctx.moveTo(player_X + (player_Width / 2) - 4, player_Y + player_Height - 4);
+	ctx.lineTo(player_X, player_Y + 10);
+	ctx.lineTo(player_X, player_Y + 4);
+	ctx.lineTo(player_X + (player_Width / 2) - 4, player_Y + player_Height - 10);
+	ctx.lineTo(player_X + (player_Width / 2) - 4, player_Y + player_Height - 4);
+	ctx.fill();
+
+	//Draw right wing
+	ctx.beginPath();
+	ctx.moveTo(player_X + (player_Width / 2) + 4, player_Y + player_Height - 4);
+	ctx.lineTo(player_X + player_Width, player_Y + 10);
+	ctx.lineTo(player_X + player_Width, player_Y + 4);
+	ctx.lineTo(player_X + (player_Width / 2) + 4, player_Y + player_Height - 10);
+	ctx.lineTo(player_X + (player_Width / 2) + 4, player_Y + player_Height - 4);
+	ctx.fill();
+
+	//Draw the Main Cannon
+	ctx.fillRect(player_X + (player_Width / 2) - 1, player_Y - 2, 2,2);
+
+	//Draw Left Wing Cannon
+	ctx.fillRect(player_X, player_Y + 2, 2, 14);
+
+	//Draw Right Wing Cannon
+	ctx.fillRect(player_X + player_Width - 2, player_Y + 2, 2, 14);
+
+	//Draw Cockpit Window
+	ctx.fillStyle = "Aqua";
+	ctx.fillRect(player_X + (player_Width / 2) - 2, player_Y + 2, 4, 6);
+
+}//end of draw player function
+/**=============END OF DRAW PLAYER FUNCTION===================*/
+
+/**============DISPLAY PLAYER DEBUG LINES FUNCTION=================*/
+function displayPlayerDebugLines(){
+	ctx.strokeStyle = "orange";
+	ctx.beginPath();
+	ctx.moveTo(player_X, player_Y + player_Height);
+	ctx.lineTo(player_X, player_Y - 10);
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.moveTo(player_X - 10, player_Y);
+	ctx.lineTo(player_X + player_Width + 10, player_Y);
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.moveTo(player_X + player_Width, player_Y - 10);
+	ctx.lineTo(player_X + player_Width, player_Y + player_Height);
+	ctx.stroke();
+}//end of display player debug lines
+/**===========END OF DISPLAY PLAYER DEBUG LINES FUNCTION==============*/
+
+/**============MAKE MAIN CANNON LASER==============================*/
+function makeMainCannonLaser(){
+	var laser_X = player_X + (player_Width / 2) - 1; //stores the X coordinate of the laser 
+	var laser_Y = player_Y - 2; //stores the y coordinate of the laser 
+	var laser_Width = 2; //stores width of the laser
+	var laser_Height = 8; //stores the height of the laser
+	var laser_Speed = 0.7; //stores the speed at which the laser moves vertically
+	var laser_HitTarget = false; //indicates if the laser hit a target or not
+
+	//make laser object
+	var mainCannonLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add laser to the array
+	mainCannonLasers.push(mainCannonLaser);
+}//end of makeMainCannonLaser function
+/**============END OF MAKE MAIN CANNON LASER========================*/
+
+/**==============MAKE WING CANNON LASERS===================================*/
+function makeWingCannonLasers(){
+	var laser_X; //stores the X coordinate of the laser
+	var laser_Y; //stores the Y coordinate of the laser
+	var laser_Width = 2; //stores the width of the laser
+	var laser_Height = 14; //stores the height of the laser
+	var laser_Speed = 0.9; //stores the speed at which the laser moves vertically
+	var laser_HitTarget = false; //indicates if laser hit a target or not
+
+	//initialize vars for left wing laser
+	laser_X = player_X;
+	laser_Y = player_Y + 2;
+
+	//make left wing laser object
+	var leftWingLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add left wing laser to the array
+	wingCannonLasers.push(leftWingLaser);
+
+	//initialize vars for right wing laser
+	laser_X = player_X + player_Width - 2;
+	laser_Y = player_Y + 2;
+
+	//make right wing laser object
+	var rightWingLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add the right wing laser object to the array
+	wingCannonLasers.push(rightWingLaser);
+
+}//end of makeWingCannonLasers function
+/**==================END OF MAKE WING CANNON LASERS==========================*/
+
+/**==============MAKE TRI CANNON LASERS=================================*/
+function makeTriCannonLasers(){
+	var laser_X; //stores the X coordinate of the laser
+	var laser_Y; //stores the Y coordinate of the laser
+	var laser_Width = 4; //stores the width of the laser
+	var laser_Height = 14; //stores the height of the laser
+	var laser_Speed = 1.1; //stores the speed at which the laser moves vertically
+	var laser_HitTarget = false; //indicates if laser hit target or not
+
+	//initialize vars for left laser
+	laser_X = player_X - 1;
+	laser_Y = player_Y + 2;
+
+	//make left tricannon laser object
+	var leftTriCannonLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add left tricannon laser object to the array
+	triCannonLasers.push(leftTriCannonLaser);
+
+	//initialize vars for center laser 
+	laser_X = player_X + (player_Width / 2) - 2;
+	laser_Y = player_Y - 2;
+
+	//make center cannon laser object
+	var centerTriCannonLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add center tricannon laser object to the array
+	triCannonLasers.push(centerTriCannonLaser);
+
+	//initialize vars for right laser
+	laser_X = player_X + player_Width - 3;
+	laser_Y = player_Y + 2;
+
+	//make right tricannon laser object
+	var rightTriCannonLaser = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add right tricannon laser object to the array
+	triCannonLasers.push(rightTriCannonLaser);
+
+}//end of make tricannon lasers function
+/**==============END OF MAKE TRI CANNON LASERS========================*/
+
+/**==============MAKE AMMOBOX FUNCTION===============================*/
+function makeAmmoBox(inputAmmoType, inputX, inputY){
+	var ammoBox_X = inputX; //stores the X coordinate of the ammobox
+	var ammoBox_Y = inputY; //stores the Y coordinate of the ammobox
+	var ammoBox_Height = 10; //stores the height of the ammobox
+	var ammoBox_Width = 10; //stores the width of the ammobox
+	var ammoBox_Speed = 1.1; //stores the speed at which the ammobox moves vertically
+	var ammoBox_Collected = false; //indicates if the ammoBox has been collected by the player
+	var ammoBox_AmmoType = inputAmmoType; //stores what kind of ammo the ammo box holds
+
+	//make ammoBox object
+	var ammoBox = {x: ammoBox_X, y: ammoBox_Y, height: ammoBox_Height, width: ammoBox_Width, speed: ammoBox_Speed, collected: ammoBox_Collected, ammoType: ammoBox_AmmoType};
+
+	//add ammoBox to the array
+	ammoBoxes.push(ammoBox);
+
+}//end of make ammobox function
+/**==============END OF MAKE AMMOBOX FUNCTION=========================*/
+
+/**==============GENERATE AMMOBOX TYPE================================*/
+function generateAmmoBoxType(){
+	var randomInt = Math.floor(Math.random() * 100) + 1; //generates a number between 1 and 100 (including those numbers)
+	var ammoType; //indicates what type of ammo the ammo box contains
+	if(randomInt < 61){ //if randomInt is between 1 and 60 (including those numbers) 60% chance of drop
+		ammoType = "mainCannon";
+	}//end of if randomInt < 61
+	else if(randomInt < 91){ //if randomInt is between 61 and 90 (including those numbers) 30% chance of drop
+		ammoType = "wingCannon";
+	}//end of if randomInt < 91
+	else{ //if randomInt is between 91 and 100 (including those numbers) 10% chance of drop
+		ammoType = "triCannon";
+	}//end of if randomInt < 101
+	return ammoType; //return the ammo type
+}//end of generateAmmoBoxType function
+/**==============END OF GENERATE AMMOBOX TYPE=========================*/
+
+/**==============DRAW AMMOBOX FUNCTION================================*/
+function drawAmmoBox(inputAmmoBox){
+	ctx.rect(inputAmmoBox.x, inputAmmoBox.y, 10, 10); 
+
+	if(inputAmmoBox.ammoType == "mainCannon"){
+		//fill in box color
+		ctx.fillStyle = 'rgb(0, 255, 0)'; //green box
+		ctx.fillRect(inputAmmoBox.x, inputAmmoBox.y, inputAmmoBox.width, inputAmmoBox.height);
+	}//end of if ammoType is mainCannon
+	else if(inputAmmoBox.ammoType == "wingCannon"){
+		//fill in box color
+		ctx.fillStyle = 'rgb(255, 0, 0)'; //red box
+		ctx.fillRect(inputAmmoBox.x, inputAmmoBox.y, inputAmmoBox.width, inputAmmoBox.height);
+	}//end of if ammoType is wingCannon
+	else if(inputAmmoBox.ammoType == "triCannon"){
+		//fill in box color
+		ctx.fillStyle = 'rgb(0, 0, 255)'; //blue box
+		ctx.fillRect(inputAmmoBox.x, inputAmmoBox.y, inputAmmoBox.width, inputAmmoBox.height);
+	}//end of if ammoType is triCannon
+	else{
+		console.log("ERROR: invalid ammoType:" + inputAmmoBox.ammoType + " detected in drawAmmoBox function.");
+	}//end of else condition
+
+	//draw the angle bracket of the letter A on the box
+	ctx.beginPath();
+	ctx.fillStyle = 'rgb(0, 0, 0)'; //white
+	ctx.moveTo(inputAmmoBox.x + 2, inputAmmoBox.y + 9);
+	ctx.lineTo(inputAmmoBox.x + 3, inputAmmoBox.y + 5);
+	ctx.lineTo(inputAmmoBox.x + 4, inputAmmoBox.y + 1);
+	ctx.lineTo(inputAmmoBox.x + 5, inputAmmoBox.y + 1);
+	ctx.lineTo(inputAmmoBox.x + 6, inputAmmoBox.y + 5);
+	ctx.lineTo(inputAmmoBox.x + 7, inputAmmoBox.y + 9);
+	ctx.stroke();
+
+	//draw the horizontal crossbar of the letter A
+	ctx.beginPath();
+	ctx.fillStyle = 'rgb(0, 0, 0)'; //white
+	ctx.moveTo(inputAmmoBox.x + 3, inputAmmoBox.y + 5);
+	ctx.lineTo(inputAmmoBox.x + 6, inputAmmoBox.y + 5);
+	ctx.stroke(); 
+}//end of draw ammoBox function
+/**==============END OF DRAW AMMOBOX FUNCTION========================*/
+
+/**===========SWITCH SELECTED WEAPON FUNCTION=======================*/
+function switchSelectedWeapon(){
+	if(selectedWeapon == 1){ //if main cannon is selected, change to wing cannon
+		selectedWeapon = 2;
+		mainCannonCooldownTimer = 0; //reset the cannon cooldown timer
+		displayMainCannonOutOfAmmoMessage = false; //reset variable
+	}//end of if main cannon is selected
+	else if(selectedWeapon == 2){//if wing cannon is selected, switch to tri-cannon
+		selectedWeapon = 3;
+		wingCannonCooldownTimer = 0; //reset the wing cannon cooldown timer
+		displayWingCannonOutOfAmmoMessage = false; //reset variable
+	}//end of if wing cannon is selected
+	else{ //if tri-cannon is selected, switch to main cannon
+		selectedWeapon = 1;
+		triCannonCooldownTimer = 0; //reset the tri cannon cooldown timer
+		displayTriCannonOutOfAmmoMessage = false; //reset the variable
+	}//end of if tricannon is selected
+}//end of switchselected weapon function
+/**============END OF SWITCH SELECTED WEAPON FUNCTION=====================*/
+
+/**==============EVERY INTERVAL FUNCTION============================*/
+function everyInterval(n){
+	if((frameNumber / n) % 1 == 0){
+		return true;
+	}
+	else{
+		return false;
+	}
+}//end of everyInterval function
+/**=============END OF EVERY INTERVAL FUNCTION======================*/
+
+/**=============MAKE METEOR FUNCTION====================================*/
+function makeMeteor(){
+	/** random integer: Math.floor(Math.random() * (max - min + 1)) + min */
+	var meteor_X = Math.floor(Math.random() * (470 - 10 + 1)) + 10; //store x position of meteor
+	var meteor_Y = 0; //stores y position of meteor
+	var meteor_R = 10; //stores radius of the meteor
+	var meteorTailLength = 50; //length of the tail that trails the meteor
+	var meteorFallingSpeed = 0.5; //speed at which the meteor falls 
+	var meteorHorizontalSpeed = 0; //speed at which the meteor moves horizontally
+	var meteorHitPlayer = false; //keeps track of if the meteor hit the player (MIGHT BE OBSOLETE)
+	var meteorDestroyed = false; //indicates if the meteor has been destroyed 
+	var meteor_Type = "normal"; //keeps track of what type of meteor the meteor is
+
+	//create meteor object
+	meteor = {x: meteor_X, y: meteor_Y, r: meteor_R, tailLength: meteorTailLength, fallingSpeed: meteorFallingSpeed, horizontalSpeed: meteorHorizontalSpeed, hitPlayer: meteorHitPlayer, destroyed: meteorDestroyed, type: meteor_Type};
+
+	//add object to array
+	fallingMeteors.push(meteor);
+}//end of makeMeteor function
+/**=============END MAKE METEOR FUNCTION=================================*/
+
+/**==============MAKE FAST METEOR FUNCTION====================================*/
+function makeFastMeteor(){
+	var meteor_X = Math.floor(Math.random() * (475 - 10 + 1)) + 10; //store x position of meteor
+	var meteor_Y = 0; //stores y position of meteor
+	var meteor_R = 5; //stores radius of the meteor
+	var meteorTailLength = 75; //length of the tail that trails the meteor
+	var meteorFallingSpeed = 0.9; //speed at which the meteor falls 
+	var meteorHorizontalSpeed = 0; //speed at which the meteor moves horizontally
+	var meteorHitPlayer = false; //keeps track of if the meteor hit the player (MIGHT BE OBSOLETE)
+	var meteorDestroyed = false; //indicates if the meteor has been destroyed 
+	var meteor_Type = "fast"; //keeps track of what type of meteor the meteor is
+
+	//create meteor object
+	fastMeteor = {x: meteor_X, y: meteor_Y, r: meteor_R, tailLength: meteorTailLength, fallingSpeed: meteorFallingSpeed, horizontalSpeed: meteorHorizontalSpeed, hitPlayer: meteorHitPlayer, destroyed: meteorDestroyed, type: meteor_Type};
+
+	//add object to array
+	fallingMeteors.push(fastMeteor);
+}//end of make fast meteor function
+/**=============END OF MAKE FAST METEOR FUNCTION=============================*/
+
+/**==============DRAW METEOR FUNCTION==================================*/
+function drawMeteor(inputMeteor){
+
+	//gradient for meteor tail
+	var meteorTailGradient = ctx.createLinearGradient(inputMeteor.x, inputMeteor.y, inputMeteor.x, inputMeteor.y - inputMeteor.tailLength);
+	if(inputMeteor.type == "normal"){
+		meteorTailGradient.addColorStop(0, "red");
+		meteorTailGradient.addColorStop(1, "yellow");
+	}//end of if normal meteor
+	else if(inputMeteor.type == "fast"){
+		meteorTailGradient.addColorStop(0, "blueviolet");
+		meteorTailGradient.addColorStop(0.5, "royalblue");
+		meteorTailGradient.addColorStop(1, "white");
+	}//end of if fast meteor
+	else{
+		console.log("ERROR: invalid meteor type:" + inputMeteor.type + " detected in drawMeteor function.");
+	}//end of type error
+	
+	//draw the triangular tail
+	ctx.beginPath();
+	ctx.fillStyle = meteorTailGradient;
+	ctx.moveTo(inputMeteor.x, inputMeteor.y); //start at the center of the circle
+	ctx.lineTo(inputMeteor.x - inputMeteor.r, inputMeteor.y); //move to right side of circle (first point on triangle)
+	ctx.lineTo(inputMeteor.x, inputMeteor.y - inputMeteor.tailLength); //move to the tip of tail
+	ctx.lineTo(inputMeteor.x + inputMeteor.r, inputMeteor.y); //move to left side of circle (third point on triangle)
+	ctx.fill();
+
+	//draw the circle
+	ctx.beginPath();
+	ctx.fillStyle = 'rgb(128,128,128)';
+	ctx.arc(inputMeteor.x, inputMeteor.y, inputMeteor.r, 0, Math.PI * 2);
+	ctx.fill();
+
+}//end of drawMeteor function
+/**==============END OF DRAW METEOR FUNCTION=========================*/
+
+/**==============MAKE ENEMY SHIP FUNCTION==============================*/
+function makeEnemyShip(){
+	var ship_X = 20; //stores the x position of the ship
+	var ship_Y = 20; //stores the y position of the ship
+	var ship_Width = 20; //stores the ship width
+	var ship_Height = 20; //stores the ship height
+	var ship_Speed = 1; //stores the speed of the ship vertically
+	var ship_HorizontalSpeed = 1; //stores the ships horizontal speed
+	var ship_Direction = "right"; //stores which direction the ship is currently moving
+	var ship_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create the ship object
+	var enemyShip = {x: ship_X, y: ship_Y, width: ship_Width, height: ship_Height, speed: ship_Speed, horizontalSpeed: ship_HorizontalSpeed, direction: ship_Direction, destroyed: ship_Destroyed};
+
+	//add ship to array
+	enemyShips.push(enemyShip);
+}//end of make enemy ship function
+/**=============END OF MAKE ENEMY SHIP FUNCTION======================*/
+
+/**===============MAKE ENEMY SHIP FORMATION FUNCTION===============*/
+function makeEnemyShipFormation(){
+	/**
+		Ship Formation:
+		5   4
+		 3 2
+		  1
+	*/
+
+	var formationOffset = (Math.floor(Math.random() * 381) + 40); //stores the X offset for the formation (so formation always spawns completely on screen [# is between 40 and 420 (including those numbers)])
+
+	/**-----------------Creating Ship 1--------------------------------*/
+	//Variables for Ship 1
+	var ship1_X = formationOffset; //stores the x position of the ship
+	var ship1_Y = 0; //stores the y position of the ship
+	var ship1_Width = 20; //stores the ships width
+	var ship1_Height = 20; //stores the ships height
+	var ship1_Speed = 2; //stores the ships vertical speed
+	var ship1_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create ship 1 object
+	var enemyShip1 = {x: ship1_X, y: ship1_Y, width: ship1_Width, height: ship1_Height, speed: ship1_Speed, destroyed: ship1_Destroyed};
+
+	//add ship1 to array
+	enemyFormationShips.push(enemyShip1);
+	/**----------------End of Creating Ship 1--------------------------*/
+
+	/**-----------------Creating Ship 2---------------------------------*/
+	//Variables for Ship 2
+	var ship2_X = formationOffset + 20; //stores the x position of the ship
+	var ship2_Y = -20; //stores the y position of the ship
+	var ship2_Width = 20; //stores the ship width
+	var ship2_Height = 20; //stores the ships height
+	var ship2_Speed = 2; //stores the ships vertical speed
+	var ship2_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create ship 2 object
+	var enemyShip2 = {x: ship2_X, y: ship2_Y, width: ship2_Width, height: ship2_Height, speed: ship2_Speed, destroyed: ship2_Destroyed};
+
+	//add ship2 to array
+	enemyFormationShips.push(enemyShip2);
+	/**----------------End od Creating Ship 2---------------------------*/
+	
+	/**-----------------Creating Ship 3---------------------------------*/
+	//Variables for Ship 3
+	var ship3_X = formationOffset - 20; //stores the x position of the ship
+	var ship3_Y = -20; //stores the y position of the ship
+	var ship3_Width = 20; //stores the ship width
+	var ship3_Height = 20; //stores the ships height
+	var ship3_Speed = 2; //stores the ships vertical speed
+	var ship3_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create ship 3 object
+	var enemyShip3 = {x: ship3_X, y: ship3_Y, width: ship3_Width, height: ship3_Height, speed: ship3_Speed, destroyed: ship3_Destroyed};
+
+	//add ship3 to array
+	enemyFormationShips.push(enemyShip3);
+	/**-----------------End of Creating Ship 3--------------------------*/
+
+	/**-----------------Creating Ship 4---------------------------------*/
+	//Variables for Ship 4
+	var ship4_X = formationOffset + 40; //stores the x position of the ship
+	var ship4_Y = -40; //stores the y position of the ship
+	var ship4_Width = 20; //stores the ship width
+	var ship4_Height = 20; //stores the ships height
+	var ship4_Speed = 2; //stores the ships vertical speed
+	var ship4_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create ship 4 object
+	var enemyShip4 = {x: ship4_X, y: ship4_Y, width: ship4_Width, height: ship4_Height, speed: ship4_Speed, destroyed: ship4_Destroyed};
+
+	//add ship4 to array
+	enemyFormationShips.push(enemyShip4);
+	/**-----------------End of Creating Ship 4--------------------------*/
+
+	/**-----------------Creating Ship 5---------------------------------*/
+	//Variables for Ship 5
+	var ship5_X = formationOffset - 40; //stores the x position of the ship
+	var ship5_Y = -40; //stores the y position of the ship
+	var ship5_Width = 20; //stores the ship width
+	var ship5_Height = 20; //stores the ships height
+	var ship5_Speed = 2; //stores the ships vertical speed
+	var ship5_Destroyed = false; //keeps track of if the ship has been destroyed or not
+
+	//create ship 5 object
+	var enemyShip5 = {x: ship5_X, y: ship5_Y, width: ship5_Width, height: ship5_Height, speed: ship5_Speed, destroyed: ship5_Destroyed};
+
+	//add ship5 to array
+	enemyFormationShips.push(enemyShip5);
+	/**-----------------End of Creating Ship 5--------------------------*/
+
+}//end of make enemy ship formation function
+/**===============END OF MAKE ENEMY SHIP FORMATION FUNCTION===========*/
+
+/**==============DRAW ENEMY SHIP==============================*/
+function drawEnemyShip(inputShip){
+	//enemy ship body
+	ctx.beginPath();
+	ctx.fillStyle = "gray";
+	ctx.moveTo(inputShip.x, inputShip.y); 
+	ctx.lineTo(inputShip.x + (inputShip.width / 2), inputShip.y + 3);
+	ctx.lineTo(inputShip.x + inputShip.width, inputShip.y);
+	ctx.lineTo(inputShip.x + (inputShip.width / 2), inputShip.y + inputShip.height);
+	ctx.lineTo(inputShip.x, inputShip.y);
+	ctx.fill();
+
+	//enemy ship cockpit
+	ctx.beginPath();
+	ctx.fillStyle = "Aqua";
+	ctx.moveTo(inputShip.x + (inputShip.width / 2), inputShip.y + inputShip.height - 3);
+	ctx.lineTo(inputShip.x + (inputShip.width / 2) - 3, inputShip.y + (inputShip.height / 2));
+	ctx.lineTo(inputShip.x + (inputShip.width / 2) + 3, inputShip.y + (inputShip.height / 2));
+	ctx.moveTo(inputShip.x + (inputShip.width / 2), inputShip.y + inputShip.height - 3);
+	ctx.fill();
+}//end of drawEnemyShip function
+/**================END OF DRAW ENEMY SHIP=========================*/
+
+/**============MAKE ENEMY LASER======================================*/
+function makeEnemyLaser(inputAIShip){
+	var laser_X = inputAIShip.x + (inputAIShip.width / 2) - 1; //stores the x coordinate of the laser
+	var laser_Y = inputAIShip.y - 2; //stores they coordinate of the laser
+	var laser_Width = 2; //stores width of the laser
+	var laser_Height = 8; //stores height of the laser
+	var laser_Speed = 0.9; //stores the speed at which the moves vertically
+	var laser_HitTarget = false; //indicates if the laser hit the player
+
+	//make the laser object
+	var enemyLaserCannon = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add laser object to array
+	enemyLasers.push(enemyLaserCannon);
+}//end of make enemy laser function
+/**=============END OF MAKE ENEMY LASER============================*/
+
+/**============MAKE ENEMY FORMATION LASER============================*/
+function makeEnemyFormationLaser(inputAIShip){
+	var laser_X = inputAIShip.x + (inputAIShip.width / 2) - 1; //stores the x coordinate of the laser
+	var laser_Y = inputAIShip.y - 2; //stores they coordinate of the laser
+	var laser_Width = 4; //stores width of the laser
+	var laser_Height = 10; //stores height of the laser
+	var laser_Speed = 2.5; //stores the speed at which the moves vertically
+	var laser_HitTarget = false; //indicates if the laser hit the player
+
+	//make the laser object
+	var enemyLaserCannon = {x: laser_X, y: laser_Y, width: laser_Width, height: laser_Height, speed: laser_Speed, hitTarget: laser_HitTarget};
+
+	//add laser object to array
+	enemyLasers.push(enemyLaserCannon);
+}//end of makeEnemyFormationLaser function
+/**============END OF MAKE ENEMY FORMATION LASER=====================*/
+
+/**=================COLLISION DETECTION FUNCTIONS===================*/
+function rectangleIntersection(inputRectangle){ //check if rectangle hit the player
+	/** player.left <= box.right && box.left <= player.right && player.top <= box.bottom && box.top <= player.bottom */
+
+	if(player_X <= (inputRectangle.x + inputRectangle.width) && inputRectangle.x <= (player_X + player_Width) && player_Y <= (inputRectangle.y + inputRectangle.height) && inputRectangle.y <= (player_Y + player_Height)){
+		return true;
+	}//end of if collision is detected
+	else{
+		return false;
+	}
+	/** returns true if there is a collision */
+}//end of rectangleIntersection
+
+function rectangleIntersection_2(inputRectangle, inputShip){ //check if rectangle hit inputship
+	/** player.left <= box.right && box.left <= player.right && player.top <= box.bottom && box.top <= player.bottom */
+
+	if(inputShip.x <= (inputRectangle.x + inputRectangle.width) && inputRectangle.x <= (inputShip.x + inputShip.width) && inputShip.y <= (inputRectangle.y + inputRectangle.height) && inputRectangle.y <= (inputShip.y + inputShip.height)){
+		return true;
+	}//end of if collision is detected
+	else{
+		return false;
+	}
+	/** returns true if there is a collision */
+}//end of rectangleIntersection_2
+
+function circleRectangleIntersection(inputMeteor){ //check if meteor hit player
+	/** Step 1: find vertical & horizontal (distX/distY) distances between the circle's center and the rectangle center.
+	Step 2: If distance is greater than halfCircle + halfRect, then they are too far apart to be colliding.
+	Step 3: If the distance is less than halfCircle + halfRect, then they are colliding.
+	Step 4: Test for collision at rect center. Think of a line from the rect center to any rect corner. Now extend that line by the radius of the circle. If the circle's center is on that line, they are colliding at exactly that rect corner. Using Pythagoras formula to compare the distance between circle and rectangle centers.
+	*/
+	//Step 1 (noted above)
+	var distX = Math.abs(inputMeteor.x - player_X - player_Width/2);
+	var distY = Math.abs(inputMeteor.y - player_Y - player_Height/2);
+
+	//Step 2 (noted above)
+	if(distX > (player_Width/2 + inputMeteor.r)) {return false;}
+	if(distY > (player_Height/2 + inputMeteor.r)) {return false;}
+
+	//Step 3 (noted above)
+	if(distX <= (player_Width/2)) {return true;}
+	if(distY <= (player_Height/2)) {return true;}
+
+	//Step 4 (noted above)
+	var dx = distX - player_Width/2;
+	var dy = distY - player_Height/2;
+	return (dx*dx+dy*dy <= (inputMeteor.r*inputMeteor.r));
+}//end of circleRectangleIntersection function
+
+function circleRectangleIntersection_2(inputMeteor, inputLaser){ //See if laser hit the meteor
+	//Explanation of collision detection in first circle rectangle intersection function
+	var distX = Math.abs(inputMeteor.x - inputLaser.x - inputLaser.width/2);
+	var distY = Math.abs(inputMeteor.y - inputLaser.y - inputLaser.height/2);
+
+	//Step 2 (noted above)
+	if(distX > (inputLaser.width/2 + inputMeteor.r)) {return false;}
+	if(distY > (inputLaser.height/2 + inputMeteor.r)) {return false;}
+
+	//Step 3 (noted above)
+	if(distX <= (inputLaser.width/2)) {return true;}
+	if(distY <= (inputLaser.height/2)) {return true;}
+
+	//Step 4 (noted above)
+	var dx = distX - inputLaser.width/2;
+	var dy = distY - inputLaser.height/2;
+	return (dx*dx+dy*dy <= (inputMeteor.r*inputMeteor.r));
+}//end of circleRectangleIntersection_2 function
+/**==================END OF COLLISION DETECTION FUNCTIONS==============*/
+
+/**============DRAW FUNCTION===================================*/
+function draw(){
+	if(gamePaused == false && gameOver == false){
+
+		//---------CLEAR THE SCREEN--------------------------
+		ctx.clearRect(0,0,480,640);
+		//---------END OF CLEAR THE SCREEN-------------------
+
+		//------------CHECK FOR GAME OVER CONDITIONS-------------
+		if(playerLives < 1){
+			gameOver = true;
+		}
+		//------------END OF CHECK FOR GAME OVER CONDITIONS-------
+
+		//-------------UPDATE BACKGROUND STAR POSITIONS/REMOVE OFFSCREEN STARS FROM ARRAY-------------
+		for(i = 0; i < fallingBackgroundStars.length; i += 1){
+			if(fallingBackgroundStars[i].y > 640){ //if off the screen
+				fallingBackgroundStars.splice(i, 1); //remove from the array
+			}//end of if y > 640
+			else{ //update the star position
+				fallingBackgroundStars[i].y = fallingBackgroundStars[i].y + fallingBackgroundStars[i].fallingSpeed;
+			}//end of update star position
+		}
+		//-------------END OF UPDATE BACKGROUND STAR POSITIONS/REMOVE OFFSCREEN STARS FROM ARRAY-------
+
+		//------------UPDATE ENEMY SHIP POSITIONS/REMOVE DESTROYED SHIPS FROM ARRAY------------------
+		for(i = 0; i < enemyShips.length; i += 1){
+			if(enemyShips[i].destroyed == true){ //if ship is destroyed
+				enemyShips.splice(i, 1); //reomve ship from array
+			}//end of if ship is destroyed
+			else if(enemyShips[i].y > 640){ //if ship is off screen
+				enemyShips.splice(i, 1); //remove ship from array
+			}//end of if off screen
+			else{ //if ship is not destroyed, update its position
+				//change direction if needed
+				if(enemyShips[i].direction == "right" && (enemyShips[i].x + enemyShips[i].width) >= 480){
+					enemyShips[i].direction = "down";
+				}
+				else if(enemyShips[i].direction == "down" && (enemyShips[i].y + enemyShips[i].height) >= 200){
+					enemyShips[i].direction = "left";
+				}
+				else if(enemyShips[i].direction == "left" && enemyShips[i].x <= 0){
+					enemyShips[i].direction = "up";
+				}
+				else if(enemyShips[i].direction == "up" && enemyShips[i].y <= 0){
+					enemyShips[i].direction = "right";
+				}
+				//move ship
+				if(enemyShips[i].direction == "right"){
+					enemyShips[i].x = enemyShips[i].x + enemyShips[i].horizontalSpeed;
+				}//if moving right
+				else if(enemyShips[i].direction == "left"){
+					enemyShips[i].x = enemyShips[i].x - enemyShips[i].horizontalSpeed;
+				}//end of if moving left
+				else if(enemyShips[i].direction == "down"){
+					enemyShips[i].y = enemyShips[i].y + enemyShips[i].speed;
+				}//end of moving down
+				else if(enemyShips[i].direction == "up"){
+					enemyShips[i].y = enemyShips[i].y - enemyShips[i].speed;
+				}//end of if moving up
+				else{
+					console.log("ERROR: invalid enemyShip direction");
+				}//end of else
+			}//end of update ship position
+		}//end of for loop
+		//--------------END OF UPDATE ENEMY SHIP POSITIONS/REMOVE DESTROYED SHIPS FROM ARRAY---------
+
+		//-------------UPDATE ENEMY FORMATION SHIP POSITION/REMOVE DESTROYED SHIPS FROM ARRAY--------
+		for(i = 0; i < enemyFormationShips.length; i += 1){
+			if(enemyFormationShips[i].destroyed == true){
+				enemyFormationShips.splice(i, 1);
+			}//end of if ship is destroyed
+			else if(enemyFormationShips[i].y > 640){
+				enemyFormationShips.splice(i, 1);
+			}//end of if ship is off the screen
+			else{ //update position
+				enemyFormationShips[i].y = enemyFormationShips[i].y + enemyFormationShips[i].speed;
+			}//end of else
+		}//end of for loop
+		//-------------END OF ENEMY FORMATION SHIP POSITION/REMOVE DESTROYED SHIPS FROM ARRAY--------
+
+		//------------UPDATE METEOR POSITIONS/REMOVE OFFSCREEN METEROS FROM ARRAY-------------------
+		for(i = 0; i < fallingMeteors.length; i += 1){
+			if(fallingMeteors[i].hitPlayer == true){ //if hit player (MAY NOT BE USED ANYMORE)
+				fallingMeteors.splice(i, 1); //remove from array
+			}//end of if hit player == true
+			else if(fallingMeteors[i].destroyed == true){ //if destroyed
+				fallingMeteors.splice(i, 1); //remove from array
+			}//end of if destroyed
+			else if(fallingMeteors[i].y > 640 + fallingMeteors[i].tailLength){ //if meteor is off the screen
+				fallingMeteors.splice(i, 1); //remove from array
+			}//end of if y > 640
+			else{//update meteor position
+				fallingMeteors[i].x = fallingMeteors[i].x + fallingMeteors[i].horizontalSpeed;
+				fallingMeteors[i].y = fallingMeteors[i].y + fallingMeteors[i].fallingSpeed;
+			}//end of update meteor position
+		}//end of for loop
+		//------------END OF UPDATE METEOR POSITIONS/REMOVE OFFSCREEN METEORS FROM ARRAY------------
+
+		//-------------UPDATE MAIN CANNON LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY------------
+		for(i = 0; i < mainCannonLasers.length; i += 1){
+			if(mainCannonLasers[i].hitTarget == true){ //if laser hit a target, remove from array
+				mainCannonLasers.splice(i, 1);
+			} //end of if laser hit target
+			else if(mainCannonLasers[i].y < 0){ //if laser is off the screen, remove it from the array
+				mainCannonLasers.splice(i, 1);
+			}//end of if mainCannonLasers y < 0
+			else{ //update laser position
+				mainCannonLasers[i].y = mainCannonLasers[i].y - mainCannonLasers[i].speed;
+			}//end of if not off the screen
+		}
+		//----------------END OF UPDATE MAIN CANNON LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY----------
+
+		//----------------UPDATE WING CANNON LASER POSITIONS/DELETE OFFSCREEN LASERS FROM ARRAY--------------
+		for(i = 0; i < wingCannonLasers.length; i += 1){
+			if(wingCannonLasers[i].hitTarget == true){ //if laser hit target, remove from array
+				wingCannonLasers.splice(i, 1); 
+			}//end of if laser hit target
+			else if(wingCannonLasers[i].y < 0){ //if laser is off the screen, remove it from the array
+				wingCannonLasers.splice(i, 1); 
+			}//end of if y < 0 
+			else{ //update the laser location
+				wingCannonLasers[i].y = wingCannonLasers[i].y - wingCannonLasers[i].speed;
+			}//end of if not off the screen
+		}
+		//---------------END OF UPDATE WING CANNON LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY------
+
+		//--------------UPDATE TRICANNON LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY----------------
+		for(i = 0; i < triCannonLasers.length; i += 1){
+			if(triCannonLasers[i].hitTarget == true){ //if laser hit target, remove from array
+				triCannonLasers.splice(i, 1);
+			}//end of if laser hit target
+			else if(triCannonLasers[i].y < 0){ //if laser is off the screen, remove it from the array
+				triCannonLasers.splice(i, 1);
+			}//end of if y < 0
+			else{ //update position
+				triCannonLasers[i].y = triCannonLasers[i].y - triCannonLasers[i].speed;
+			}//end of if not off the screen
+		}
+		//--------------END OF UPDATE TRICANNON LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY----------
+
+		//--------------UPDATE ENEMY LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY---------------------
+		for(i = 0; i < enemyLasers.length; i += 1){
+			if(enemyLasers[i].hitTarget == true){ //if laser hit the player, remove from array
+				enemyLasers.splice(i, 1);
+			}//end of if laser hit player
+			else if(enemyLasers[i] > 640){ //if laser is off the screen, remove it from array
+				enemyLasers.splice(i, 1);
+			}
+			else{ //update position
+				enemyLasers[i].y = enemyLasers[i].y + enemyLasers[i].speed;
+			}
+		}
+		//--------------END OF UPDATE ENEMY LASER POSITIONS/REMOVE OFFSCREEN LASERS FROM ARRAY--------------
+
+		//--------------UPDATE AMMOBOX POSITIONS/REMOVE OFFSCREEN AMMOBOXES FROM ARRAY----------------------
+		for(i = 0; i < ammoBoxes.length; i += 1){
+			if(ammoBoxes[i].collected == true){ //if ammoBox was collected by player, remove from array
+				ammoBoxes.splice(i, 1);
+			}//end of if ammobox collected
+			else if(ammoBoxes[i].y < 0){ //if ammoBox is off the screen, remove it from array
+				ammoBoxes.splice(i, 1);
+			}//end of if y < 0
+			else{ //update position
+				ammoBoxes[i].y = ammoBoxes[i].y + ammoBoxes[i].speed;
+			}//end of if not off the screen
+		}
+		//--------------END OF UPDATE AMMOBOX POSITIONS/REMOVE OFFSCREEN AMMOBOXES FROM ARRAY---------------
+
+		//---------UPDATE PLAYER VARS--------------------------
+		if(keyMap[37] == true && player_X > -1){ //if left arrow key is pressed and player not against left wall
+			player_X += -2;
+		} //end of if left arrow key is pressed
+		else if(keyMap[39] == true && player_X < 461){ //if right arrow key is pressed and player not against right wall
+			player_X += 2;
+		} //end of if right arrow key is pressed
+		//----------END OF UPDATE PLAYER VARS------------------
+
+		//------------UPDATE COUNTER VARS-----------------------
+		frameNumber += 1;
+		//------------END OF UPDATE COUNTER VARS---------------
+
+		//------------UPDATE DIFFICULTY LEVEL VAR--------------
+		if(frameNumber < 2500){
+			difficultyLevel = 1;
+		}//end of if frameNUmber < 2500
+		else if(frameNumber < 4000){
+			difficultyLevel = 2;
+		}//end of if frameNUmber < 4000
+		else if(frameNumber < 6000){
+			difficultyLevel = 3;
+		}//end of if frameNumber < 6000
+		else if(frameNumber < 8000){
+			difficultyLevel = 4;
+		}//end of if frameNumber < 8000
+		else if(frameNumber < 10000){
+			difficultyLevel = 5;
+		}//end of if frameNumber < 10000
+		else{
+			difficultyLevel = 6;
+		}//end of if frameNumber > 10000
+		//------------END OF UPDATE DIFFICULTY VAR-------------
+
+		//------------MAKE BACKGROUND STARS-------------------
+		var backgroundStarInterval = Math.floor(Math.random() * (100 - 10 + 1)) + 10;  //generate random int between 10 and 100 (including those numbers)
+		if(everyInterval(backgroundStarInterval) == true){  //earliest = every 10 frames,  latest = every 100 frames 
+			makeBackgroundStar();
+		}//end of if everyinterval == true
+		//-------------END OF MAKE BACKGROUND STARS-----------
+
+		//-------------MAKE ENEMY SHIPS----------------------
+		if(frameNumber < 2500){ //if frameNumber < 2500
+			if(enemyShips.length < 5){
+				if(everyInterval(175) == true){ //every 175 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 5 enemys
+		}//end of if frameNumber is less than 2500
+		else if(frameNumber < 4000){
+			if(enemyShips.length < 7){
+				if(everyInterval(150) == true){ //every 150 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 7 enemys
+		}//end of if frameNumber < 4000
+		else if(frameNumber < 6000){
+			if(enemyShips.length < 10){
+				if(everyInterval(125) == true){ //every 125 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 10 enemys
+		}//end of if frameNumber < 6000
+		else if(frameNumber < 8000){
+			if(enemyShips.length < 15){
+				if(everyInterval(100) == true){ //every 100 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 15 enemys
+		}//end of if frameNumber < 8000
+		else if(frameNumber < 10000){
+			if(enemyShips.length < 18){
+				if(everyInterval(75) == true){ //every 75 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 18 enemys
+		}//end of if frameNumber < 10000
+		else{ //if frameNumber > 10000
+			if(enemyShips.length < 21){
+				if(everyInterval(60) == true){ //every 60 frames
+					makeEnemyShip();
+				}//end of everyinterval
+			}//end of if less than 21 enemys
+		}//end of if frameNumber is > than 10000
+		
+		//---------------END OF MAKE ENEMY SHIPS-------------
+
+		//------------MAKE ENEMY FORMATION SHIPS------------
+		var enemyShipFormationInterval; 
+		if(frameNumber < 2500){
+			//do not generate enemy formation ships
+		}//end of if frameNumber < 2500
+		else if(frameNumber < 4000){
+			/**														(random * (max - min)) + min    */
+			enemyShipFormationInterval = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000; //generate interval for enemy ship formations (random int between 1000 and 3000 (including those numbers))
+			if(everyInterval(enemyShipFormationInterval) == true){ //earliest = every 1000 frames, latest = every 3000 frames
+				makeEnemyShipFormation();
+			}//end of if enemyShipFormation interval == true
+		}//end of if frameNumber < 4000
+		else if(frameNumber < 6000){
+			/**														(random * (max - min)) + min    */
+			enemyShipFormationInterval = Math.floor(Math.random() * (1500 - 800 + 1)) + 800; //generate interval for enemy ship formations (random int between 800 and 1500 (including those numbers))
+			if(everyInterval(enemyShipFormationInterval) == true){ //earliest = every 800 frames, latest = every 1500 frames
+				makeEnemyShipFormation();
+			}//end of if enemyShipFormation interval == true
+		}//end of if frameNumber < 6000
+		else if(frameNumber < 8000){
+			/**														(random * (max - min)) + min    */
+			enemyShipFormationInterval = Math.floor(Math.random() * (1250 - 600 + 1)) + 600; //generate interval for enemy ship formations (random int between 600 and 1250 (including those numbers))
+			if(everyInterval(enemyShipFormationInterval) == true){ //earliest = every 600 frames, latest = 1250 frames
+				makeEnemyShipFormation();
+			}//end of if enemyShipFormation interval == true
+		}//end of if frameNumber < 8000
+		else if(frameNumber < 10000){
+			/**														(random * (max - min)) + min    */
+			enemyShipFormationInterval = Math.floor(Math.random() * (1000 - 400 + 1)) + 400; //generate interval for enemy ship formations (random int between 400 and 1000 (including those numbers))
+			if(everyInterval(enemyShipFormationInterval) == true){ //earliest = every 400 frames, latest = 1000 frames
+				makeEnemyShipFormation();
+			}//end of if enemyShipFormation interval == true
+		}//end of if frameNumber < 10000
+		else{ //if frameNumber is > 10000
+			/**														(random * (max - min)) + min    */
+			enemyShipFormationInterval = Math.floor(Math.random() * (750 - 300 + 1)) + 300; //generate interval for enemy ship formations (random int between 300 and 750 (including those numbers))
+			if(everyInterval(enemyShipFormationInterval) == true){ //earliest = every 300 frames, latest = 750 frames
+				makeEnemyShipFormation();
+			}//end of if enemyShipFormation interval == true
+		}//end of if frameNumber is greater than 10000
+		//------------END OF MAKE ENEMY FORMATION SHIPS-----
+
+		//-------------MAKE ENEMY LASERS---------------------
+		//ENEMY SHIPS
+		//fire when player is beneath the enemy ship
+		for(i = 0; i < enemyShips.length; i += 1){
+			if(enemyShips[i].x == player_X){ //if enemy ship is directly above
+				makeEnemyLaser(enemyShips[i]);
+			}//end of if player is below the enemy ship
+			else if((enemyShips[i].x + 1) == player_X){
+				makeEnemyLaser(enemyShips[i]);
+			}//end of if player is below the enemy ship (offset by one, in the event that the player is moving)
+		}//end of for loop for enemy ships
+
+		//ENEMY FORMATION SHIPS
+		for(i = 0; i < enemyFormationShips.length; i += 1){
+			if(enemyFormationShips[i].y < 560){
+				if(enemyFormationShips[i].x == player_X){ //if enemy ship is directly above
+					makeEnemyFormationLaser(enemyFormationShips[i]);
+				}//end of if player is below the enemy ship
+				else if((enemyFormationShips[i].x + 1) == player_X){
+					makeEnemyFormationLaser(enemyFormationShips[i]);
+				}//end of if player is below the enemy ship (offset by one, in the event that the player is moving)
+			}//end of if enemyFormationShip.y is < 560
+		}//end of for loop for enemy formation ships
+		//--------------END OF MAKE ENEMY LASERS-------------
+
+		//--------------MAKE METEORS------------------------
+		var meteorInterval;
+		if(frameNumber < 2500){
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (700 - 300 + 1)) + 300; //generate interval to spawn meteor (random int between 300 and 700 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 300 frames, latest = every 700 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNumber < 2500
+		else if(frameNumber < 4000){
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (600 - 300 + 1)) + 300; //generate interval to spawn meteor (random int between 300 and 600 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 300 frames, latest = every 600 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNumber < 4000
+		else if(frameNumber < 6000){
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (500 - 300 + 1)) + 300; //generate interval to spawn meteor (random int between 300 and 500 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 300 frames, latest = every 500 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNUmber < 6000
+		else if(frameNumber < 8000){
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (400 - 300 + 1)) + 300; //generate interval to spawn meteor (random int between 300 and 400 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 300 frames, latest = every 400 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNumber < 8000
+		else if(frameNumber < 10000){
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (300 - 200 + 1)) + 200; //generate interval to spawn meteor (random int between 200 and 300 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 200 frames, latest = every 300 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNumber < 10000
+		else{ //if frameNumber > 10000
+			/**														(random * (max - min)) + min    */
+			meteorInterval = Math.floor(Math.random() * (200 - 125 + 1)) + 125; //generate interval to spawn meteor (random int between 125 and 200 (including those numbers))
+			if(everyInterval(meteorInterval) == true){ //earliest = every 125 frames, latest = every 200 frames
+				makeMeteor();
+			}//end of if meteor interval == true
+		}//end of if frameNumber > 10000
+		//--------------END OF MAKE METEORS----------------
+
+		//-------------MAKE FAST METEORS--------------------
+		var fastMeteorInterval;
+		if(frameNumber < 2500){
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000; //generate interval for fast meteors (random int between 1000 and 2000 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 1000 frames, latest = every 2000 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNumber < 2500
+		else if(frameNumber < 4000){
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (1750 - 900 + 1)) + 900; //generate interval for fast meteors (random int between 900 and 1750 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 900 frames, latest = every 1750 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNumber < 4000
+		else if(frameNumber < 6000){
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (1500 - 800 + 1)) + 800; //generate interval for fast meteors (random int between 800 and 1500 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 800 frames, latest = every 1500 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNUmber < 6000
+		else if(frameNumber < 8000){
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (1250 - 700 + 1)) + 700; //generate interval for fast meteors (random int between 700 and 1250 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 700 frames, latest = every 1250 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNumber < 8000
+		else if(frameNumber < 10000){
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (1000 - 600 + 1)) + 600; //generate interval for fast meteors (random int between 600 and 1000 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 600 frames, latest = every 1000 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNumber < 10000
+		else{ //if frameNumber > 10000
+			/**														(random * (max - min)) + min    */
+			fastMeteorInterval = Math.floor(Math.random() * (750 - 500 + 1)) + 500; //generate interval for fast meteors (random int between 500 and 750 (including those numbers))
+			if(everyInterval(fastMeteorInterval) == true){ //earliest = every 500 frames, latest = every 750 frames
+				makeFastMeteor();
+			}//end of if fast meteor interval == true
+		}//end of if frameNumber > 10000
+		//------------END OF MAKE FAST METEORS--------------
+
+		//------------MAKE CANNON LASERS IF SPACEBAR IS PRESSED------------------
+		if(keyMap[32] == true){ //if spacebar is pressed
+			if(selectedWeapon == 1 && mainCannonAmmo > 0){ //if main cannon selected and player has ammo for that cannon
+				if(mainCannonCooldownTimer == 0){
+					makeMainCannonLaser();
+					mainCannonCooldownTimer = 20; //set cooldown
+					mainCannonAmmo -= 1; //decremnt ammo count
+				}//end of if mainCannonCooldownTimer == 0
+				else { //if mainCannonCooldownTimer > 0
+					mainCannonCooldownTimer -= 1; //decrement by 1
+				}//end of if mainCannonCooldownTimer > 0
+			}//end of if main cannon is selected
+			else if(selectedWeapon == 1 && mainCannonAmmo == 0){
+				displayMainCannonOutOfAmmoMessage = true;
+			}//end of if selectedWeapon == 1 and ammo == 0
+			else if(selectedWeapon == 2 && wingCannonAmmo > 0){ //if wing cannons are selected and player has ammo for that cannon
+				if(wingCannonCooldownTimer == 0){
+					makeWingCannonLasers();
+					wingCannonCooldownTimer = 20; //set the cooldown
+					wingCannonAmmo -= 1; //decrement ammo count
+				}//end of if wingCannonCoolDown Timer == 0
+				else{
+					wingCannonCooldownTimer -= 1; //decrement by 1
+				}
+			}//end of if wing cannons are selected
+			else if(selectedWeapon == 2 && wingCannonAmmo == 0){
+				displayWingCannonOutOfAmmoMessage = true;
+			}//end of if selectedWeapon == 2 and ammo == 0
+			else if(selectedWeapon == 3 && triCannonAmmo > 0){ //if tri-cannon is selected and player has ammo for that cannon
+				if(triCannonCooldownTimer == 0){
+					makeTriCannonLasers();
+					triCannonCooldownTimer = 20; //set the cooldown
+					triCannonAmmo -= 1; //decrement ammo count
+				}//end of if triCannon countdown timer == 0
+				else{
+					triCannonCooldownTimer -= 1; //decrementg by 1
+				}
+			}//end of if tri-cannon selected
+			else if(selectedWeapon == 3 && triCannonAmmo == 0){
+				displayTriCannonOutOfAmmoMessage = true;
+			}//end of if tricannon selected  and ammo ==0
+		}//end of if spacebar is pressed
+		else if(keyMap[32] == false){ //if  spacebar is not pressed
+			mainCannonCooldownTimer = 0; //reset the cooldown timer
+			wingCannonCooldownTimer = 0; //reset the cooldown timer
+			triCannonCooldownTimer = 0; //reset the cooldown timer
+		}//end of if spacebar is not pressed
+		//---------------END OF MAKE CANNON LASER------------------------------
+
+		//---------DRAW BLACK BACKGROUND---------------------
+		ctx.fillStyle = "rgb(0,0,0)";
+		ctx.save(); //save canvas state because the style was changed
+		ctx.fillRect(0,0,480,640); 
+		//---------END OF DRAW BLACK BACKGROUND--------------
+
+		//----------DRAW THE BACKGROUND STARS---------------
+		for(i = 0; i < fallingBackgroundStars.length; i += 1){
+			ctx.beginPath();
+			ctx.fillStyle = "white";
+			ctx.arc(fallingBackgroundStars[i].x, fallingBackgroundStars[i].y, fallingBackgroundStars[i].r, 0 , Math.PI * 2);
+			ctx.fill();
+		}
+		//----------END OF DRAW THE BACKGROUND STARS--------
+
+		//------------DRAW ENEMY SHIPS----------------------
+		for(i = 0; i < enemyShips.length; i += 1){
+			drawEnemyShip(enemyShips[i]); //draw the enemy ship
+		}//end of for loop
+		//-------------END OF DRAW ENEMY SHIPS--------------
+
+		//------------DRAW ENEMY FORMATION SHIPS------------
+		for(i = 0; i < enemyFormationShips.length; i += 1){
+			drawEnemyShip(enemyFormationShips[i]); //draw the enemy ship
+		}//end of for loop
+		//------------END OF ENEMY FORMATION SHIPS----------
+
+		//----------DRAW TH METEORS-------------------------
+		for(i = 0; i < fallingMeteors.length; i += 1){
+			drawMeteor(fallingMeteors[i]);
+		}//end of for loop
+		//-----------END OF DRAW THE METEORS----------------
+
+		//----------DRAW THE MAIN CANNON LASERS-------------
+		for(i = 0; i < mainCannonLasers.length; i += 1){
+			ctx.fillStyle = "Lime";
+			ctx.fillRect(mainCannonLasers[i].x, mainCannonLasers[i].y, mainCannonLasers[i].width, mainCannonLasers[i].height);
+		}
+		//-----------END OF DRAW THE MAIN CANNON LASERS------
+
+		//---------DRAW THE WING CANNON LASERS---------------
+		for(i = 0; i < wingCannonLasers.length; i += 1){
+			ctx.fillStyle = "Fuchsia";
+			ctx.fillRect(wingCannonLasers[i].x, wingCannonLasers[i].y, wingCannonLasers[i].width, wingCannonLasers[i].height);
+		}
+		//----------------END OF DRAW THE WING CANNON LASERS--------
+
+		//----------DRAW THE TRICANNON LASERS---------------
+		for(i = 0; i < triCannonLasers.length; i += 1){
+			ctx.fillStyle = "DodgerBlue";
+			ctx.fillRect(triCannonLasers[i].x, triCannonLasers[i].y, triCannonLasers[i].width, triCannonLasers[i].height);
+		}
+		//-------------END OF DRAW THE TRICANNON LASERS-------
+
+		//------------DRAW THE ENEMY LASERS-----------------
+		for(i = 0; i < enemyLasers.length; i += 1){
+			ctx.fillStyle = 'rgb(255, 0, 0)';
+			ctx.fillRect(enemyLasers[i].x, enemyLasers[i].y, enemyLasers[i].width, enemyLasers[i].height);
+		}
+		//------------END OF DRAW THE ENEMY LASERS----------
+
+		//----------DRAW THE AMMOBOXES--------------------
+		for(i = 0; i < ammoBoxes.length; i += 1){
+			drawAmmoBox(ammoBoxes[i]);
+		}
+		//----------END OF DRAW THE AMMOBOXES-------------
+
+	    //---------DRAW/MOVE THE PLAYER-------------------------
+	    drawPlayer();
+	    //----------END OF DRAW/MOVE THE PLAYER----------------
+
+	    //----------DISPLAY PLAYER DEBUG LINES---------------
+	    if(debugMode == true){
+	    	displayPlayerDebugLines();
+	    }//end of if debug mode == true
+	    //-------------END OF DISPLAY PLAYER DEBUG LINES-----
+
+	    //----------DRAW THE HUD-----------------------------
+	    ctx.font = "14px Arial";
+	    ctx.fillStyle = "white";
+	    ctx.fillText("SCORE: " + String(playerScore), 10, 14);
+	    ctx.fillText("LIVES: " + String(playerLives), 10, 28);
+	    ctx.fillText("DIFFICULTY LV: " + String(difficultyLevel), 10, 42);
+	    ctx.fillText("---------------------------", 10, 56);
+	    if(selectedWeapon == 1){ //if main cannon is selected
+	    	ctx.fillStyle = "yellow";
+	    }//end of if main cannon is selected
+	    else{
+	    	ctx.fillStyle = "white";
+	    }//end of if main cannon is not selected
+	    ctx.fillText("Main Cannon Ammo: " + String(mainCannonAmmo), 10, 70);
+	    if(selectedWeapon == 2){ //if wing cannon selected
+	    	ctx.fillStyle = "yellow";
+	    }//end of if wing cannon is selected
+	    else{
+	    	ctx.fillStyle = "white";
+	    }//end of if wing cannon is not selected
+	    ctx.fillText("Wing Cannon Ammo: " + String(wingCannonAmmo), 10, 84);
+	    if(selectedWeapon == 3){ //if tri-cannon is selected
+	    	ctx.fillStyle = "yellow";
+	    }//end of if tri-cannon selected
+	    else{
+	    	ctx.fillStyle = "white";
+	    }
+	    ctx.fillText("Tri-Cannon Ammo: " + String(triCannonAmmo), 10, 98);
+	    //----------END OF DRAW THE HUD---------------------
+
+	    //----------DRAW DEBUG HUD--------------------------
+	    if(debugMode == true){
+	    	ctx.font = "14px Arial";
+	    	ctx.fillStyle = "yellow";
+	    	ctx.fillText("DEBUG MODE", 380, 14);
+	    	ctx.fillText("frameNumber:" + String(frameNumber), 320, 28);
+	    	ctx.fillText("player_X:" + String(player_X), 380, 42);
+	    	ctx.fillText("player_Y:" + String(player_Y), 380, 56);
+	    	ctx.fillText("# Enemy Ships:" + String(enemyShips.length), 320, 70);
+	    	ctx.fillText("# Formation Enemy Ships:" + String(enemyFormationShips.length), 300, 84);
+	    }//end of if debugMode == true
+	    //-----------END OF DRAW DEBUG HUD---------------------
+
+	    //-----------DISPLAY OUT OF AMMO MESSAGE---------------
+	    if(displayMainCannonOutOfAmmoMessage == true){
+	    	ctx.font = "20px Arial";
+			ctx.fillStyle = 'rgba(255,0,0,0.6)';
+			ctx.fillText("Out of Main Cannon Ammo", 120, 560);
+	    }//end of if displayMainCannonOutOfAmmoMessage == true
+	    else if(displayWingCannonOutOfAmmoMessage == true){
+	    	ctx.font = "20px Arial";
+	    	ctx.fillStyle = 'rgba(255,0,0,0.6)';
+	    	ctx.fillText("Out of Wing Cannon Ammo", 120, 560);
+	    }//end of if displayWingCannonOutOfAmmoMessage == true
+	    else if(displayTriCannonOutOfAmmoMessage == true){
+	    	ctx.font = "20px Arial";
+	    	ctx.fillStyle = 'rgba(255,0,0,0.6)';
+	    	ctx.fillText("Out of Tri-Cannon Ammo", 120, 560);
+	    }//end of if displayTriCannonOutOfAmmoMessage== true
+		//---------END OF DISPLAY OUT OF AMMO MESSAGE------
+
+		//------------CHECK FOR COLLISION DETECTION----------
+		//METEOR COLLISION
+		//check to see if any meteors collided with player
+		for(i = 0; i < fallingMeteors.length; i += 1){
+			if(circleRectangleIntersection(fallingMeteors[i]) == true){
+				fallingMeteors[i].hitPlayer = true;
+				playerLives -= 1; //decrement lives
+				fallingMeteors[i].destroyed = true;
+			}//end of if
+		}//end of for loop
+
+		//NOTE: main cannon lasers cannot destroy meteors
+		//check wing cannon lasers for collision with meteors
+		for(i = 0; i < wingCannonLasers.length; i += 1){
+			for(j = 0; j < fallingMeteors.length; j += 1){
+				if(circleRectangleIntersection_2(fallingMeteors[j], wingCannonLasers[i]) == true){
+					wingCannonLasers[i].hitTarget = true; //destroy the laser
+					fallingMeteors[j].destroyed = true; //destroy the meteor
+					playerScore += 20; //increment player score by 20
+				}//end of if
+			}
+		}//end of for loop
+
+		//check tri-cannon lasers for collision with meteors
+		for(i = 0; i < triCannonLasers.length; i += 1){
+			for(j = 0; j < fallingMeteors.length; j += 1){
+				if(circleRectangleIntersection_2(fallingMeteors[j], triCannonLasers[i]) == true){
+					triCannonLasers[i].hitTarget = true; //destroy laser
+					fallingMeteors[j].destroyed = true; //destroy meteor
+					playerScore += 20; //increment player score by 20
+				}
+			}
+		}//end of for loop
+		//END OF METEOR COLLISION
+
+		//LASER COLLISION WITH ENEMY SHIP AI
+		//check main cannon lasers for collision with enemy ship AI
+		for(i = 0; i < mainCannonLasers.length; i += 1){
+			for(j = 0; j < enemyShips.length; j += 1){
+				if(rectangleIntersection_2(mainCannonLasers[i], enemyShips[j]) == true){
+					mainCannonLasers[i].hitTarget = true;
+					enemyShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyShips[j].x, enemyShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+
+		//check wing cannon lasers for collision with enemy ship AI
+		for(i = 0; i < wingCannonLasers.length; i += 1){
+			for(j = 0; j <  enemyShips.length; j += 1){
+				if(rectangleIntersection_2(wingCannonLasers[i], enemyShips[j]) == true){
+					wingCannonLasers[i].hitTarget = true;
+					enemyShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyShips[j].x, enemyShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+
+		//check tri cannon lasers for collision with enemy ship AI
+		for(i = 0; i < triCannonLasers.length; i += 1){
+			for(j = 0; j < enemyShips.length; j += 1){
+				if(rectangleIntersection_2(triCannonLasers[i], enemyShips[j]) == true){
+					triCannonLasers[i].hitTarget = true;
+					enemyShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyShips[j].x, enemyShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+		//END OF LASER COLLISION WITH ENEMY SHIP AI
+
+		//LASER COLLISION WITH ENEMY FORMATION SHIP AI
+		//check main cannon lasers for collision with enemy formation AI
+		for(i = 0; i < mainCannonLasers.length; i += 1){
+			for(j = 0; j < enemyFormationShips.length; j += 1){
+				if(rectangleIntersection_2(mainCannonLasers[i], enemyFormationShips[j]) == true){
+					mainCannonLasers[i].hitTarget = true;
+					enemyFormationShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyFormationShips[j].x, enemyFormationShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+
+		//check wing cannon lasers for collision with enemy formation ship AI
+		for(i = 0; i < wingCannonLasers.length; i += 1){
+			for(j = 0; j <  enemyFormationShips.length; j += 1){
+				if(rectangleIntersection_2(wingCannonLasers[i], enemyFormationShips[j]) == true){
+					wingCannonLasers[i].hitTarget = true;
+					enemyFormationShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyFormationShips[j].x, enemyFormationShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+
+		//check tri cannon lasers for collision with enemy formation ship AI
+		for(i = 0; i < triCannonLasers.length; i += 1){
+			for(j = 0; j < enemyFormationShips.length; j += 1){
+				if(rectangleIntersection_2(triCannonLasers[i], enemyFormationShips[j]) == true){
+					triCannonLasers[i].hitTarget = true;
+					enemyFormationShips[j].destroyed = true;
+					playerScore += 5; //increment player score by 5
+					var tempAmmoBoxType = generateAmmoBoxType();
+					makeAmmoBox(tempAmmoBoxType, enemyFormationShips[j].x, enemyFormationShips[j].y);
+				}//end of if
+			}
+		}//end of for loop
+		//END OF LASER COLLISION WITH ENEMY FORMATION SHIPS AI
+
+		//check to see if enemy formation ship collided with player
+		for(i = 0; i < enemyFormationShips.length; i += 1){
+			if(rectangleIntersection(enemyFormationShips[i])  == true){
+				enemyFormationShips[i].destroyed = true;
+				playerLives -= 1; //decrement lives
+			}//end of if 
+		}//end of for loop
+
+		//check for enemy laser collision with player
+		for(i = 0; i < enemyLasers.length; i += 1){
+			if(rectangleIntersection(enemyLasers[i]) == true){
+				enemyLasers[i].hitTarget = true;
+				playerLives -= 1; //decrement lives
+			}//end of if
+		}//end of for loop
+
+		//check ammobox collision with Player
+		for(i = 0; i < ammoBoxes.length; i += 1){
+			if(rectangleIntersection(ammoBoxes[i]) == true){
+				ammoBoxes[i].collected = true;
+				//add ammo based on ammoType
+				if(ammoBoxes[i].ammoType == "mainCannon"){
+					if(mainCannonAmmo < 185){
+						mainCannonAmmo += 25;
+					}//end of if mainCannonAmmo < 185
+					else if((mainCannonAmmo > 184) && (mainCannonAmmo < 200)){
+						mainCannonAmmo = 200;
+					}//end of if mainCannonAmmo > 184 and < 200
+					else{
+						mainCannonAmmo = 200;
+					}//end of else
+					playerScore += 10; //increment by 10
+				}//end of if ammoType is mainCannon
+				else if(ammoBoxes[i].ammoType == "wingCannon"){
+					if(wingCannonAmmo < 85){
+						wingCannonAmmo += 15;
+					}//end of if wingCannonAmmo < 85
+					else if((wingCannonAmmo > 84) && (wingCannonAmmo < 100)){
+						wingCannonAmmo = 100;
+					}//end of if wingCannonAmmo > 84 and < 100
+					else{
+						wingCannonAmmo = 100;
+					}//end of else
+					playerScore += 15; //increment by 15
+				}//end of if ammoType is wingCannon
+				else{
+					if(triCannonAmmo < 35){
+						triCannonAmmo += 10;
+					}//end of if triCannonAmmo < 35
+					else if((triCannonAmmo > 34) && (triCannonAmmo < 50)){
+						triCannonAmmo = 50;
+					}//end of if triCannonAmmo > 34 and < 50
+					else{
+						triCannonAmmo = 50;
+					}//end of else 
+					playerScore += 25; //increment by 25
+				}//end of if ammoType is triCannon
+			}//end of if collision with player
+		}//end of for loop
+		//-----------END OF CHECK FOR COLLISION DETECTION-----
+
+		//-------RESTORE CANVAS STATE---------------------
+		ctx.restore(); //restore the canvas state before drawing the next frame
+		//-------END OF RESTORE CANVAS STATE--------------------
+	} //end of if gamePaused == false && gameOver == false
+	else{
+		ctx.font = "24px Arial";
+		ctx.fillStyle = "red";
+		if(gamePaused == true){
+			ctx.fillText("PAUSED", 190, 320);
+		}
+		else if(gameOver == true){
+			ctx.fillText("GAME OVER", 190, 320);
+		}
+
+		//display the controls
+		ctx.font = "18px Arial";
+		ctx.fillStyle = "red";
+		ctx.fillText("----CONTROLS----", 165, 350);
+		ctx.fillText("Right Arrow Key = Move Right", 165, 368);
+		ctx.fillText("Left Arrow Key = Move Left", 165, 386);
+		ctx.fillText("E key = Pause Game", 165, 404);
+		ctx.fillText("F key = Toggle Selected Weapon", 165, 422);
+		ctx.fillText("Spacebar = Fire Selected Weapon", 165, 440);
+		ctx.fillText("Q key = Toggle Debug Mode", 165, 458);
+		ctx.fillText("C key (while paused) = Enter Cheat", 165, 476);
+	}//end of else gamePaused == true
+	//------CALL THE DRAW FUNCTION AGAIN-------------------
+	window.requestAnimationFrame(draw);
+	//---------END OF CALL THE DRAW FUNCTION AGAIN---------
+}//end of draw function
+/**===========END OF DRAW FUNCTION=============================*/
+</script>
+<table>
+	<tr>
+		<td>
+			<p>CONTROLS: <br>
+			-----------------<br>
+			Right Arrow Key = Move Right <br>
+			Left Arrow Key = Move Left <br>
+			E key = Pause Game <br>
+			F key = Toggle Selected Weapon <br>
+			Spacebar = Fire Selected Weapon<br>
+			Q key = Toggle Debug Mode <br>
+			C key (while paused) = Enter Cheat</p>
+		</td>
+		<td>
+			<p>NOTES: <br>
+			------------------------<br>
+			Only Wing Cannons or Tri-Cannons can destroy meteors/fast meteors.<br>
+		</td>
+	</tr>
+</table>
+</body>
+</html>
